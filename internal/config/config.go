@@ -23,7 +23,7 @@ func ParseFlags(args []string) (Config, error) {
 	urls := fs.String("urls", "", "стартовые URL'ы через запятую (обязательный параметр)")
 	depth := fs.Int("depth", 0, "максимальная глубина рекурсивного обхода")
 	overallTimeout := fs.Duration("timeout", 1*time.Minute, "общий таймаут выполнения")
-	requestTimeout := fs.Duration("request-timeout", 5*time.Second, "таймаут выполнения одного запроса")
+	requestTimeout := fs.Duration("request-timeout", 10*time.Second, "таймаут выполнения одного запроса")
 	outputPath := fs.String("output", "../../out/result.json", "путь к файлу с результатом (JSON)")
 	logPath := fs.String("log", "../../out/crawler.log", "путь к лог-файлу")
 
