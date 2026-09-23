@@ -3,9 +3,13 @@ package config
 import (
 	"flag"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 )
+
+// number of goroutines used for fetching pages concurrently
+const MaxConcurrency = 10
 
 type Config struct {
 	StartURLs      []string
@@ -20,12 +24,12 @@ type Config struct {
 func ParseFlags(args []string) (Config, error) {
 	fs := flag.NewFlagSet("crawler-cli", flag.ContinueOnError)
 
-	urls := fs.String("urls", "", "стартовые URL'ы через запятую (обязательный параметр)")
-	depth := fs.Int("depth", 0, "максимальная глубина рекурсивного обхода")
-	overallTimeout := fs.Duration("timeout", 1*time.Minute, "общий таймаут выполнения")
-	requestTimeout := fs.Duration("request-timeout", 10*time.Second, "таймаут выполнения одного запроса")
-	outputPath := fs.String("output", "../../out/result.json", "путь к файлу с результатом (JSON)")
-	logPath := fs.String("log", "../../out/crawler.log", "путь к лог-файлу")
+	urls := fs.String("urls", "", "comma-separated URLs (required)")
+	depth := fs.Int("depth", 0, "maximum depth of recursive traversal")
+	overallTimeout := fs.Duration("timeout", 1*time.Minute, "overall timeout for program execution")
+	requestTimeout := fs.Duration("request-timeout", 10*time.Second, "timeout per request")
+	outputPath := fs.String("output", "../../out/result.json", "path to the result json file")
+	logPath := fs.String("log", "../../out/crawler.log", "path to the log file")
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, fmt.Errorf("parse flags: %w", err)
@@ -34,6 +38,12 @@ func ParseFlags(args []string) (Config, error) {
 	startURLs := splitURLs(*urls)
 	if len(startURLs) == 0 {
 		return Config{}, fmt.Errorf("--urls is required")
+	}
+
+	for _, u := range startURLs {
+		if err := validateURL(u); err != nil {
+			return Config{}, err
+		}
 	}
 
 	if *depth < 0 {
@@ -45,7 +55,7 @@ func ParseFlags(args []string) (Config, error) {
 		MaxDepth:       *depth,
 		OverallTimeout: *overallTimeout,
 		RequestTimeout: *requestTimeout,
-		MaxConcurrency: 10,
+		MaxConcurrency: MaxConcurrency,
 		OutputPath:     strings.TrimSpace(*outputPath),
 		LogPath:        strings.TrimSpace(*logPath),
 	}, nil
@@ -61,4 +71,18 @@ func splitURLs(urlsStr string) []string {
 		}
 	}
 	return res
+}
+
+func validateURL(raw string) error {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("invalid start URL: %s: %w", raw, err)
+	}
+	if parsed.Scheme == "" {
+		return fmt.Errorf("start URL scheme cannot be empty: %s", raw)
+	}
+	if parsed.Host == "" {
+		return fmt.Errorf("start URL host cannot be empty: %s", raw)
+	}
+	return nil
 }
