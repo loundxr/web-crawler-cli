@@ -7,6 +7,9 @@ import (
 	"time"
 )
 
+// number of goroutines used for fetching pages concurrently
+const MaxConcurrency = 10
+
 type Config struct {
 	StartURLs      []string
 	MaxDepth       int
@@ -45,7 +48,7 @@ func ParseFlags(args []string) (Config, error) {
 		MaxDepth:       *depth,
 		OverallTimeout: *overallTimeout,
 		RequestTimeout: *requestTimeout,
-		MaxConcurrency: 10,
+		MaxConcurrency: MaxConcurrency,
 		OutputPath:     strings.TrimSpace(*outputPath),
 		LogPath:        strings.TrimSpace(*logPath),
 	}, nil
