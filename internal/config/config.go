@@ -3,6 +3,7 @@ package config
 import (
 	"flag"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -39,6 +40,12 @@ func ParseFlags(args []string) (Config, error) {
 		return Config{}, fmt.Errorf("--urls is required")
 	}
 
+	for _, u := range startURLs {
+		if err := validateURL(u); err != nil {
+			return Config{}, err
+		}
+	}
+
 	if *depth < 0 {
 		return Config{}, fmt.Errorf("depth must be non-negative")
 	}
@@ -64,4 +71,18 @@ func splitURLs(urlsStr string) []string {
 		}
 	}
 	return res
+}
+
+func validateURL(raw string) error {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("invalid start URL: %s: %w", raw, err)
+	}
+	if parsed.Scheme == "" {
+		return fmt.Errorf("start URL scheme cannot be empty: %s", raw)
+	}
+	if parsed.Host == "" {
+		return fmt.Errorf("start URL host cannot be empty: %s", raw)
+	}
+	return nil
 }
