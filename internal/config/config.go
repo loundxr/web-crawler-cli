@@ -23,12 +23,12 @@ type Config struct {
 func ParseFlags(args []string) (Config, error) {
 	fs := flag.NewFlagSet("crawler-cli", flag.ContinueOnError)
 
-	urls := fs.String("urls", "", "стартовые URL'ы через запятую (обязательный параметр)")
-	depth := fs.Int("depth", 0, "максимальная глубина рекурсивного обхода")
-	overallTimeout := fs.Duration("timeout", 1*time.Minute, "общий таймаут выполнения")
-	requestTimeout := fs.Duration("request-timeout", 10*time.Second, "таймаут выполнения одного запроса")
-	outputPath := fs.String("output", "../../out/result.json", "путь к файлу с результатом (JSON)")
-	logPath := fs.String("log", "../../out/crawler.log", "путь к лог-файлу")
+	urls := fs.String("urls", "", "comma-separated URLs (required)")
+	depth := fs.Int("depth", 0, "maximum depth of recursive traversal")
+	overallTimeout := fs.Duration("timeout", 1*time.Minute, "overall timeout for program execution")
+	requestTimeout := fs.Duration("request-timeout", 10*time.Second, "timeout per request")
+	outputPath := fs.String("output", "../../out/result.json", "path to the result json file")
+	logPath := fs.String("log", "../../out/crawler.log", "path to the log file")
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, fmt.Errorf("parse flags: %w", err)
