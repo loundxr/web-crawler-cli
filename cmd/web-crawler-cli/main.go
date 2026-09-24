@@ -16,10 +16,6 @@ import (
 	"github.com/loundxr/web-crawler-cli/internal/utils"
 )
 
-// TODO: logs formatting
-// TODO: README
-// TODO: unit-tests
-
 func main() {
 	cfg, err := config.ParseFlags(os.Args[1:])
 	if err != nil {

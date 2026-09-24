@@ -26,7 +26,7 @@ func ParseFlags(args []string) (Config, error) {
 	fs := flag.NewFlagSet("crawler-cli", flag.ContinueOnError)
 
 	urls := fs.String("urls", "", "comma-separated URLs (required)")
-	depth := fs.Int("depth", 2, "maximum depth of recursive traversal")
+	depth := fs.Int("depth", 0, "maximum depth of recursive traversal")
 	overallTimeout := fs.Duration("timeout", 1*time.Minute, "overall timeout for program execution")
 	requestTimeout := fs.Duration("request-timeout", 10*time.Second, "timeout per request")
 	outputPath := fs.String("output", "out/result.json", "path to the result json file")
