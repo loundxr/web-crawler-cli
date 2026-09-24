@@ -5,9 +5,11 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+
+	"github.com/loundxr/web-crawler-cli/internal/applog/handlers"
 )
 
-func New(path string) (*slog.Logger, *os.File, error) {
+func New(path string) (logger *slog.Logger, cleanup func(), err error) {
 	dir := filepath.Dir(path)
 
 	if dir != "" && dir != "." {
@@ -19,9 +21,13 @@ func New(path string) (*slog.Logger, *os.File, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("open log file: %w", err)
 	}
-	handler := slog.NewJSONHandler(file, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	})
-	logger := slog.New(handler)
-	return logger, file, nil
+
+	formatHandler := handlers.NewFormatHandler(file)
+	logger = slog.New(formatHandler)
+
+	cleanup = func() {
+		file.Close()
+	}
+
+	return logger, cleanup, nil
 }

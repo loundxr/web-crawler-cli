@@ -17,7 +17,7 @@ func (c *Crawler) Start(ctx context.Context) []*model.Node {
 	for _, url := range c.cfg.StartURLs {
 		rootHost, err := hostOf(url)
 		if err != nil {
-			c.logger.Error("failed to extract host", "url", url, "error", err)
+			c.logger.Error("failed to extract host", "error", err, "url", url)
 			continue
 		}
 
@@ -55,7 +55,7 @@ func (c *Crawler) crawlNode(ctx context.Context, url string, depth int, rootHost
 	if outcome.SkipReason != fetcher.NoSkip || outcome.Err != nil {
 		cancel()
 		<-c.sem
-		c.logger.Warn("fetch failed", "url", url, "reason", outcome.SkipReason, "error", outcome.Err)
+		c.logger.Warn("fetch failed", "reason", outcome.SkipReason, "error", outcome.Err, "url", url)
 		return nil
 	}
 
@@ -66,13 +66,13 @@ func (c *Crawler) crawlNode(ctx context.Context, url string, depth int, rootHost
 	<-c.sem
 
 	if err != nil {
-		c.logger.Warn("read failed", "url", url, "error", err)
+		c.logger.Warn("read failed", "error", err, "url", url)
 		return nil
 	}
 
 	page, err := parser.ParseResponseBody(bytes.NewReader(data), url)
 	if err != nil {
-		c.logger.Warn("parse failed", "url", url, "error", err)
+		c.logger.Warn("parse failed", "error", err, "url", url)
 		return nil
 	}
 
