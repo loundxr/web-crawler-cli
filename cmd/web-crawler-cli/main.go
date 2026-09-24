@@ -26,24 +26,20 @@ func main() {
 		log.Fatal("parse config error:", err)
 	}
 
-	logger, logFile, err := applog.New(cfg.LogPath)
+	logger, cleanup, err := applog.New(cfg.LogPath)
 	if err != nil {
 		log.Fatal("create logger error:", err)
 	}
-	defer logFile.Close()
+	defer cleanup()
+
+	f := fetcher.New(cfg.MaxConcurrency)
+	c := crawler.New(f, cfg, logger)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	ctx, cancel := context.WithTimeout(ctx, cfg.OverallTimeout)
 	defer cancel()
-
-	f := fetcher.New(cfg.MaxConcurrency)
-	c := crawler.New(f, cfg, logger)
-
-	if ctx.Err() != nil {
-		log.Println("crawling interrputed or timed out, saving results...")
-	}
 
 	start := time.Now()
 	nodes := c.Start(ctx)

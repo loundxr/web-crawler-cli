@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 )
 
-func New(path string) (*slog.Logger, *os.File, error) {
+func New(path string) (logger *slog.Logger, cleanup func(), err error) {
 	dir := filepath.Dir(path)
 
 	if dir != "" && dir != "." {
@@ -22,6 +22,11 @@ func New(path string) (*slog.Logger, *os.File, error) {
 	handler := slog.NewJSONHandler(file, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	})
-	logger := slog.New(handler)
-	return logger, file, nil
+	logger = slog.New(handler)
+
+	cleanup = func() {
+		file.Close()
+	}
+
+	return logger, cleanup, nil
 }
