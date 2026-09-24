@@ -2,19 +2,23 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/loundxr/web-crawler-cli/internal/applog"
 	"github.com/loundxr/web-crawler-cli/internal/config"
 	"github.com/loundxr/web-crawler-cli/internal/crawler"
 	"github.com/loundxr/web-crawler-cli/internal/fetcher"
-	"github.com/loundxr/web-crawler-cli/internal/model"
+	"github.com/loundxr/web-crawler-cli/internal/utils"
 )
+
+// TODO: logs formatting
+// TODO: README
+// TODO: unit-tests
 
 func main() {
 	cfg, err := config.ParseFlags(os.Args[1:])
@@ -41,24 +45,13 @@ func main() {
 		log.Println("crawling interrputed or timed out, saving results...")
 	}
 
+	start := time.Now()
 	nodes := c.Start(ctx)
+	fmt.Println("crawl time: ", time.Since(start))
 
-	if err := writeResultToFile(nodes, cfg.OutputPath); err != nil {
+	if err := utils.WriteResults(nodes, cfg.OutputPath); err != nil {
 		log.Fatal("write result error:", err)
 	}
 
 	log.Println("crawling completed successfully")
-}
-
-func writeResultToFile(nodes []*model.Node, path string) error {
-	data, err := json.MarshalIndent(nodes, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal nodes: %w", err)
-	}
-
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf("write file: %w", err)
-	}
-
-	return nil
 }

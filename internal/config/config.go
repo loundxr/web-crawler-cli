@@ -3,9 +3,10 @@ package config
 import (
 	"flag"
 	"fmt"
-	"net/url"
 	"strings"
 	"time"
+
+	"github.com/loundxr/web-crawler-cli/internal/utils"
 )
 
 // number of goroutines used for fetching pages concurrently
@@ -35,13 +36,13 @@ func ParseFlags(args []string) (Config, error) {
 		return Config{}, fmt.Errorf("parse flags: %w", err)
 	}
 
-	startURLs := splitURLs(*urls)
+	startURLs := utils.SplitURLs(*urls)
 	if len(startURLs) == 0 {
 		return Config{}, fmt.Errorf("--urls is required")
 	}
 
 	for _, u := range startURLs {
-		if err := validateURL(u); err != nil {
+		if err := utils.ValidateURL(u); err != nil {
 			return Config{}, err
 		}
 	}
@@ -59,30 +60,4 @@ func ParseFlags(args []string) (Config, error) {
 		OutputPath:     strings.TrimSpace(*outputPath),
 		LogPath:        strings.TrimSpace(*logPath),
 	}, nil
-}
-
-func splitURLs(urlsStr string) []string {
-	parts := strings.Split(urlsStr, ",")
-	res := make([]string, 0, len(parts))
-	for _, url := range parts {
-		url = strings.TrimSpace(url)
-		if url != "" {
-			res = append(res, url)
-		}
-	}
-	return res
-}
-
-func validateURL(raw string) error {
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		return fmt.Errorf("invalid start URL: %s: %w", raw, err)
-	}
-	if parsed.Scheme == "" {
-		return fmt.Errorf("start URL scheme cannot be empty: %s", raw)
-	}
-	if parsed.Host == "" {
-		return fmt.Errorf("start URL host cannot be empty: %s", raw)
-	}
-	return nil
 }

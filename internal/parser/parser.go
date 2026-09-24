@@ -3,9 +3,9 @@ package parser
 import (
 	"io"
 	"net/url"
-	"strings"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/loundxr/web-crawler-cli/internal/utils"
 )
 
 type PageData struct {
@@ -32,7 +32,7 @@ func ParseResponseBody(body io.Reader, baseURL string) (PageData, error) {
 			return
 		}
 
-		resolved, ok := resolveURL(base, href)
+		resolved, ok := utils.ResolveURL(base, href)
 		if !ok {
 			return
 		}
@@ -44,22 +44,4 @@ func ParseResponseBody(body io.Reader, baseURL string) (PageData, error) {
 		Title:    title,
 		RawLinks: rawLinks,
 	}, nil
-}
-
-func resolveURL(base *url.URL, href string) (string, bool) {
-	href = strings.TrimSpace(href)
-	if href == "" {
-		return "", false
-	}
-
-	parsedURL, err := url.Parse(href)
-	if err != nil {
-		return "", false
-	}
-
-	if parsedURL.Scheme != "" && parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		return "", false
-	}
-
-	return base.ResolveReference(parsedURL).String(), true
 }
