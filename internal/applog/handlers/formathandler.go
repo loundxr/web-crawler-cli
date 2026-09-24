@@ -29,7 +29,7 @@ func (h *FormatHandler) Enabled(_ context.Context, _ slog.Level) bool {
 func (h *FormatHandler) Handle(_ context.Context, r slog.Record) error {
 	var b strings.Builder
 
-	b.WriteString(r.Time.Format("2006-01-02 15:04:05"))
+	b.WriteString(r.Time.Format("2006-01-02 15:04:05.000"))
 	b.WriteByte('\t')
 	b.WriteString(r.Level.String())
 	b.WriteByte('\t')
@@ -77,5 +77,10 @@ func (h *FormatHandler) WithGroup(_ string) slog.Handler {
 func writeAttr(b *strings.Builder, a slog.Attr) {
 	b.WriteString(a.Key)
 	b.WriteByte('=')
-	b.WriteString(fmt.Sprint(a.Value.Any()))
+	switch a.Key {
+	case "reason":
+		b.WriteString(fmt.Sprintf("%-10s", a.Value.Any()))
+	default:
+		b.WriteString(fmt.Sprint(a.Value.Any()))
+	}
 }
