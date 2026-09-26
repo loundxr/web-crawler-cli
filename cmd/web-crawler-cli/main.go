@@ -40,6 +40,13 @@ func main() {
 	nodes := c.Start(ctx)
 	log.Println("crawl time: ", time.Since(start))
 
+	switch ctx.Err() {
+	case context.DeadlineExceeded:
+		log.Println("crawling timed out")
+	case context.Canceled:
+		log.Println("crawling canceled")
+	}
+
 	if err := utils.WriteResults(nodes, cfg.OutputPath); err != nil {
 		log.Fatal("write result error:", err)
 	}
