@@ -92,6 +92,7 @@ func TestFetch_NonHTML(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"test":true}`))
 	}))
+	defer server.Close()
 
 	f := fetcher.New(10)
 	outcome := f.Fetch(context.Background(), server.URL)
