@@ -14,8 +14,8 @@ import (
 
 func TestFetch_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
 		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("<html><title>success</title></html>"))
 	}))
 	defer server.Close()
