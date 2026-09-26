@@ -55,7 +55,7 @@ func (c *Crawler) crawlNode(ctx context.Context, url string, depth int, rootHost
 	if outcome.SkipReason != fetcher.NoSkip || outcome.Err != nil {
 		cancel()
 		<-c.sem
-		c.logger.Warn("fetch failed", "reason", outcome.SkipReason, "error", outcome.Err, "url", url)
+		c.logger.Warn("fetch failed", "status", outcome.StatusCode, "reason", outcome.SkipReason, "error", outcome.Err, "url", url)
 		return nil
 	}
 
