@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -39,7 +38,7 @@ func main() {
 
 	start := time.Now()
 	nodes := c.Start(ctx)
-	fmt.Println("crawl time: ", time.Since(start))
+	log.Println("crawl time: ", time.Since(start))
 
 	if err := utils.WriteResults(nodes, cfg.OutputPath); err != nil {
 		log.Fatal("write result error:", err)
