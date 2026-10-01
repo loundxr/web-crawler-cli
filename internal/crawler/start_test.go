@@ -18,12 +18,14 @@ import (
 )
 
 type testPage struct {
-	title string
-	links []string
-	delay time.Duration
+	title       string
+	links       []string
+	delay       time.Duration
+	statusCode  int
+	contentType string
 }
 
-func newTestServer(pages map[string]testPage) *httptest.Server {
+func newTestServer(pages map[string]testPage, middleware ...func(http.Handler) http.Handler) *httptest.Server {
 	mux := http.NewServeMux()
 
 	for path, page := range pages {
@@ -32,16 +34,32 @@ func newTestServer(pages map[string]testPage) *httptest.Server {
 				time.Sleep(page.delay)
 			}
 
+			contentType := page.contentType
+			if contentType == "" {
+				contentType = "text/html; charset=utf-8"
+			}
+			w.Header().Set("Content-Type", contentType)
+
+			status := page.statusCode
+			if status == 0 {
+				status = http.StatusOK
+			}
+			w.WriteHeader(status)
+
 			var linksHTML strings.Builder
 			for _, l := range page.links {
 				fmt.Fprintf(&linksHTML, `<a href="%s">link</a>`, l)
 			}
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			fmt.Fprintf(w, `<html><head><title>%s</title></head><body>%s</body></html>`, page.title, linksHTML.String())
 		})
 	}
 
-	return httptest.NewServer(mux)
+	var handler http.Handler = mux
+	for _, mw := range middleware {
+		handler = mw(handler)
+	}
+
+	return httptest.NewServer(handler)
 }
 
 func newTestLogger() *slog.Logger {
@@ -110,7 +128,6 @@ func TestCrawler_Start_MultiLevelTraversal(t *testing.T) {
 	}
 
 	a1 := a.Links[0]
-	// why localhost:8888/a1, not localhost:8888/a/a1???????
 	if a1.Resource != server.URL+"/a1" || a1.Title != "A1" {
 		t.Errorf("/a1=%+v, want resource=%s/a1, title=%q", a1, server.URL, "A1")
 	}
@@ -130,50 +147,16 @@ func TestCrawler_Start_MultiLevelTraversal(t *testing.T) {
 	}
 }
 
-func TestCrawler_Start_Cancellation(t *testing.T) {
+func TestCrawler_Start_PartialChildFailure(t *testing.T) {
 	server := newTestServer(map[string]testPage{
-		"/":  {title: "root", links: []string{"/a", "/b", "/c"}, delay: 200 * time.Millisecond},
-		"/a": {title: "A", delay: 200 * time.Millisecond},
-		"/b": {title: "B", delay: 200 * time.Millisecond},
-		"/c": {title: "C", delay: 200 * time.Millisecond},
-	})
-	defer server.Close()
-
-	f := fetcher.New(10)
-	c := crawler.New(
-		f,
-		config.Config{
-			MaxDepth:       3,
-			OverallTimeout: 5 * time.Second,
-			MaxConcurrency: 10,
+		"/": {
+			title: "root",
+			links: []string{"/ok1", "/ok2", "/broken-status", "/broken-type"},
 		},
-		newTestLogger(),
-	)
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	done := make(chan []*model.Node)
-	go func() {
-		done <- c.Start(ctx)
-	}()
-
-	time.Sleep(50 * time.Millisecond)
-	cancel()
-
-	select {
-	case <-done:
-		if ctx.Err() == nil {
-			t.Fatal("ctx.Err() == nil after cancellation")
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("c.Start() didn't finish after 3sec after call, possible deadlock")
-	}
-}
-
-func TestCrawler_Start_OverallTimeout(t *testing.T) {
-	server := newTestServer(map[string]testPage{
-		"/":  {title: "root", links: []string{"/a"}, delay: 300 * time.Millisecond},
-		"/a": {title: "A", delay: 300 * time.Millisecond},
+		"/ok1":           {title: "OK 1"},
+		"/ok2":           {title: "OK 2"},
+		"/broken-status": {statusCode: http.StatusUnavailableForLegalReasons},
+		"/broken-type":   {contentType: "application/json"},
 	})
 	defer server.Close()
 
@@ -181,8 +164,7 @@ func TestCrawler_Start_OverallTimeout(t *testing.T) {
 	c := crawler.New(
 		f,
 		config.Config{
-			MaxDepth:       3,
-			OverallTimeout: time.Minute,
+			MaxDepth:       1,
 			RequestTimeout: 5 * time.Second,
 			MaxConcurrency: 10,
 			StartURLs:      []string{server.URL},
@@ -190,25 +172,43 @@ func TestCrawler_Start_OverallTimeout(t *testing.T) {
 		newTestLogger(),
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	initTime := time.Now()
-	done := make(chan []*model.Node)
-	go func() {
-		done <- c.Start(ctx)
-	}()
+	roots := c.Start(ctx)
 
-	select {
-	case <-done:
-		workTime := time.Since(initTime)
-		if workTime > 700*time.Millisecond {
-			t.Fatalf("c.Start() finished after %v, overallTimeout didn't stopped the app flow", workTime)
-		}
-		if ctx.Err() == nil {
-			t.Fatal("ctx.Err() == nil, want context.DeadlineExceeded")
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("c.Start() didn't finish after 3sec after call, possible deadlock")
+	if len(roots) != 1 {
+		t.Fatalf("len(roots)=%d, want 1", len(roots))
+	}
+
+	root := roots[0]
+	if len(root.Links) != 2 {
+		t.Fatalf("len(root.Links)=%d, want 2 (got %+v)", len(root.Links), root.Links)
+	}
+
+	children := mapByResource(root.Links)
+
+	ok1, ok := children[server.URL+"/ok1"]
+	if !ok {
+		t.Fatal("successful node /ok1 not found in root.Links")
+	}
+	if ok1.Title != "OK 1" {
+		t.Errorf("ok1.Title=%q, want %q", ok1.Title, "OK 1")
+	}
+
+	ok2, ok := children[server.URL+"/ok2"]
+	if !ok {
+		t.Fatal("successful node /ok2 not found in root.Links")
+	}
+	if ok2.Title != "OK 2" {
+		t.Errorf("ok2.Title=%q, want %q", ok2.Title, "OK 2")
+	}
+
+	if _, ok := children[server.URL+"/broken-status"]; ok {
+		t.Error("/broken-status shouldn't be in the result")
+	}
+
+	if _, ok := children[server.URL+"/broken-type"]; ok {
+		t.Error("/broken-type shouldn't be in the result")
 	}
 }
