@@ -38,7 +38,7 @@ func (c *Crawler) Start(ctx context.Context) []*model.Node {
 		}()
 	}
 
-	var roots []*model.Node
+	roots := make([]*model.Node, 0)
 	collectDone := make(chan struct{})
 	go func() {
 		collect(results, &roots)
