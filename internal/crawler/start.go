@@ -1,114 +1,80 @@
 package crawler
 
 import (
-	"bytes"
 	"context"
-	"io"
+	"sync"
 
-	"github.com/loundxr/web-crawler-cli/internal/fetcher"
 	"github.com/loundxr/web-crawler-cli/internal/model"
-	"github.com/loundxr/web-crawler-cli/internal/parser"
 )
 
-func (c *Crawler) Start(ctx context.Context) []*model.Node {
-	results := make(chan *model.Node, len(c.cfg.StartURLs))
-	launched := 0
-
-	for _, url := range c.cfg.StartURLs {
-		rootHost, err := hostOf(url)
-		if err != nil {
-			c.logger.Error("failed to extract host", "error", err, "url", url)
-			continue
-		}
-
-		if !c.tryVisit(url) {
-			c.logger.Warn("URL already visited", "url", url)
-			continue
-		}
-
-		launched++
-		go func(url, rootHost string) {
-			results <- c.crawlNode(ctx, url, 0, rootHost)
-		}(url, rootHost)
-	}
-
-	nodes := make([]*model.Node, 0, launched)
-	for i := 0; i < launched; i++ {
-		if node := <-results; node != nil {
-			nodes = append(nodes, node)
-		}
-	}
-
-	return nodes
+type task struct {
+	url      string
+	depth    int
+	rootHost string
+	parent   *model.Node
 }
 
-func (c *Crawler) crawlNode(ctx context.Context, url string, depth int, rootHost string) *model.Node {
-	select {
-	case c.sem <- struct{}{}:
-	case <-ctx.Done():
-		return nil
+type taskResult struct {
+	node   *model.Node
+	parent *model.Node
+}
+
+func (c *Crawler) Start(ctx context.Context) []*model.Node {
+	submit := make(chan task)
+	jobs := make(chan task)
+	results := make(chan taskResult)
+
+	var tasksWG sync.WaitGroup
+	stopDispatch := make(chan struct{})
+
+	go c.dispatch(submit, jobs, stopDispatch)
+
+	var workersWG sync.WaitGroup
+	for i := 0; i < c.cfg.MaxConcurrency; i++ {
+		workersWG.Add(1)
+		go func() {
+			defer workersWG.Done()
+			c.worker(ctx, jobs, submit, results, &tasksWG)
+		}()
 	}
 
-	reqCtx, cancel := context.WithTimeout(ctx, c.cfg.RequestTimeout)
-	outcome := c.fetcher.Fetch(reqCtx, url)
+	var roots []*model.Node
+	collectDone := make(chan struct{})
+	go func() {
+		collect(results, &roots)
+		close(collectDone)
+	}()
 
-	if outcome.SkipReason != fetcher.NoSkip || outcome.Err != nil {
-		cancel()
-		<-c.sem
-		c.logger.Warn("fetch failed", "status", outcome.StatusCode, "reason", outcome.SkipReason, "error", outcome.Err, "url", url)
-		return nil
-	}
-
-	data, err := io.ReadAll(outcome.Body)
-	outcome.Body.Close()
-
-	cancel()
-	<-c.sem
-
-	if err != nil {
-		c.logger.Warn("read failed", "error", err, "url", url)
-		return nil
-	}
-
-	page, err := parser.ParseResponseBody(bytes.NewReader(data), url)
-	if err != nil {
-		c.logger.Warn("parse failed", "error", err, "url", url)
-		return nil
-	}
-
-	node := model.NewNode(url, page.Title)
-
-	if depth >= c.cfg.MaxDepth || ctx.Err() != nil {
-		return node
-	}
-
-	candidates := make([]string, 0, len(page.RawLinks))
-	for _, link := range page.RawLinks {
-		if !sameDomain(link, rootHost) {
+	for _, u := range c.cfg.StartURLs {
+		rootHost, err := hostOf(u)
+		if err != nil {
+			c.logger.Error(
+				"failed to extract host",
+				"error", err,
+				"url", u,
+			)
 			continue
 		}
-		if !c.tryVisit(link) {
+
+		if !c.tryVisit(u) {
+			c.logger.Error(
+				"URL already visited",
+				"url", u,
+			)
 			continue
 		}
-		candidates = append(candidates, link)
+
+		tasksWG.Add(1)
+		submit <- task{url: u, depth: 0, rootHost: rootHost, parent: nil}
 	}
 
-	if len(candidates) == 0 {
-		return node
-	}
+	tasksWG.Wait()
+	close(stopDispatch)
 
-	childResults := make(chan *model.Node, len(candidates))
-	for _, link := range candidates {
-		go func(link string) {
-			childResults <- c.crawlNode(ctx, link, depth+1, rootHost)
-		}(link)
-	}
+	workersWG.Wait()
 
-	for i := 0; i < len(candidates); i++ {
-		if childNode := <-childResults; childNode != nil {
-			node.Links = append(node.Links, childNode)
-		}
-	}
+	close(results)
+	<-collectDone
 
-	return node
+	return roots
 }

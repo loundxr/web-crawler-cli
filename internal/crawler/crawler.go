@@ -12,7 +12,6 @@ type Crawler struct {
 	fetcher *fetcher.Fetcher
 	cfg     config.Config
 	logger  *slog.Logger
-	sem     chan struct{}
 	mu      sync.Mutex
 	visited map[string]struct{}
 }
@@ -22,7 +21,6 @@ func New(f *fetcher.Fetcher, cfg config.Config, l *slog.Logger) *Crawler {
 		fetcher: f,
 		cfg:     cfg,
 		logger:  l,
-		sem:     make(chan struct{}, cfg.MaxConcurrency),
 		visited: make(map[string]struct{}),
 	}
 }
